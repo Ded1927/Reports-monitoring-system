@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import templates, reports
 
 app = FastAPI(
     title="Інформаційна система моніторингу стану кіберзахисту",
     description="API для управління звітами та кібероцінюванням",
-    version="1.0.0"
+    version="1.0.0",
+    root_path="/api"
 )
 
 # CORS configuration (will be restricted in production)
@@ -15,6 +17,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(templates.router)
+app.include_router(reports.router)
 
 @app.get("/health")
 async def health_check():
