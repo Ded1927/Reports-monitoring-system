@@ -7,3 +7,5 @@ pydantic-settings==2.2.1
 alembic==1.13.1
 passlib[argon2]==1.7.4
 python-multipart==0.0.9
+pandas
+openpyxl

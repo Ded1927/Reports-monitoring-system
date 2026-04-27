@@ -19,9 +19,16 @@ class ControlType(enum.Enum):
 class ReportStatus(enum.Enum):
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
-    IN_REVIEW = "IN_REVIEW"
     RETURNED = "RETURNED"
-    APPROVED = "APPROVED"
+    ARCHIVED = "ARCHIVED"
+
+class UserRole(enum.Enum):
+    USER = "USER"
+    ANALYST = "ANALYST"
+    OBSERVER = "OBSERVER"
+    FUNC_ADMIN = "FUNC_ADMIN"
+    TECH_ADMIN = "TECH_ADMIN"
+
 
 # --- IAM STUBS ---
 class Organization(Base):
@@ -34,7 +41,23 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER)
+    is_active = Column(Boolean, default=True)
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=True)
+    
+    reports = relationship("Report", back_populates="author")
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_token = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
 
 # --- REPORT TEMPLATES ---
 class ReportTemplate(Base):
@@ -106,7 +129,9 @@ class Report(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     submitted_at = Column(DateTime, nullable=True)
     is_signed_kep = Column(Boolean, default=False)
+    registration_number = Column(String, nullable=True, unique=True, index=True)
 
+    author = relationship("User", back_populates="reports")
     answers = relationship("ReportAnswer", back_populates="report", cascade="all, delete-orphan")
 
 class ReportAnswer(Base):

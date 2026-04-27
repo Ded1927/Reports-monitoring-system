@@ -3,7 +3,8 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Report, ReportAnswer, ReportStatus, Organization, User, ReportTemplate
+from ..models import Report, ReportAnswer, ReportStatus, Organization, User, ReportTemplate, UserRole
+from ..auth import get_current_active_user, RoleChecker
 from uuid import UUID
 
 router = APIRouter(
@@ -14,10 +15,9 @@ router = APIRouter(
 UPLOAD_DIR = "/app/storage/evidence"
 
 @router.get("/my")
-async def get_my_reports(db: Session = Depends(get_db)):
-    user = db.query(User).filter_by(email="test@cyber.gov.ua").first()
-    if not user:
-        return []
+async def get_my_reports(db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    user = current_user
+
     
     results = db.query(Report, ReportTemplate).join(ReportTemplate, Report.template_id == ReportTemplate.id).filter(Report.author_id == user.id).order_by(Report.created_at.desc()).all()
     
@@ -26,16 +26,47 @@ async def get_my_reports(db: Session = Depends(get_db)):
         reports_data.append({
             "id": report.id,
             "template_name": template.name,
+            "template_type": template.type.value,
             "status": report.status.value,
             "created_at": report.created_at.isoformat() if report.created_at else None
         })
     return reports_data
 
+@router.get("/all")
+async def get_all_reports(db: Session = Depends(get_db), current_user: User = Depends(RoleChecker([UserRole.ANALYST, UserRole.FUNC_ADMIN]))):
+    # Аналітик бачить тільки ті звіти, які не є чернетками
+    results = db.query(Report, ReportTemplate, User).join(
+        ReportTemplate, Report.template_id == ReportTemplate.id
+    ).join(
+        User, Report.author_id == User.id
+    ).filter(
+        Report.status.in_([ReportStatus.SUBMITTED, ReportStatus.RETURNED])
+    ).order_by(Report.created_at.desc()).all()
+    
+    reports_data = []
+    for report, template, user in results:
+        reports_data.append({
+            "id": report.id,
+            "template_name": template.name,
+            "template_type": template.type.value,
+            "status": report.status.value,
+            "created_at": report.created_at.isoformat() if report.created_at else None,
+            "author_email": user.email
+        })
+    return reports_data
+
 @router.get("/{report_id}")
-async def get_report(report_id: UUID, db: Session = Depends(get_db)):
+async def get_report(report_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+        
+    if current_user.role == UserRole.USER:
+        if report.author_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this report")
+    elif current_user.role == UserRole.ANALYST:
+        if report.status == ReportStatus.DRAFT:
+            raise HTTPException(status_code=403, detail="Analysts cannot view draft reports")
     
     answers_dict = {}
     for ans in report.answers:
@@ -49,8 +80,19 @@ async def get_report(report_id: UUID, db: Session = Depends(get_db)):
         "answers": answers_dict
     }
 
+@router.post("/{report_id}/return")
+async def return_report(report_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(RoleChecker([UserRole.ANALYST, UserRole.FUNC_ADMIN]))):
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.status != ReportStatus.SUBMITTED:
+        raise HTTPException(status_code=400, detail="Only submitted reports can be returned")
+    report.status = ReportStatus.RETURNED
+    db.commit()
+    return {"message": "Report returned for revision"}
+
 @router.post("/submit")
-async def submit_report(request: Request, db: Session = Depends(get_db)):
+async def submit_report(request: Request, db: Session = Depends(get_db), current_user: User = Depends(RoleChecker([UserRole.USER]))):
     form = await request.form()
     payload_str = form.get("payload")
     if not payload_str:
@@ -61,19 +103,10 @@ async def submit_report(request: Request, db: Session = Depends(get_db)):
     answers = payload.get("answers", [])
     report_id = payload.get("report_id")
 
-    org = db.query(Organization).first()
+    user = current_user
+    org = db.query(Organization).filter(Organization.id == user.organization_id).first()
     if not org:
-        org = Organization(name="Тестова Організація")
-        db.add(org)
-        db.commit()
-        db.refresh(org)
-    
-    user = db.query(User).filter_by(email="test@cyber.gov.ua").first()
-    if not user:
-        user = User(email="test@cyber.gov.ua", organization_id=org.id)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        raise HTTPException(status_code=400, detail="User has no organization")
 
     status_str = payload.get("status", "SUBMITTED")
     report_status = ReportStatus.SUBMITTED if status_str == "SUBMITTED" else ReportStatus.DRAFT
@@ -123,6 +156,17 @@ async def submit_report(request: Request, db: Session = Depends(get_db)):
             evidence_file_path=evidence_path
         )
         db.add(db_answer)
+
+    # Архівація попередніх звітів
+    if report_status == ReportStatus.SUBMITTED:
+        older_reports = db.query(Report).filter(
+            Report.author_id == user.id,
+            Report.template_id == template_id,
+            Report.status.in_([ReportStatus.SUBMITTED, ReportStatus.RETURNED]),
+            Report.id != new_report.id
+        ).all()
+        for r in older_reports:
+            r.status = ReportStatus.ARCHIVED
 
     db.commit()
     return {"status": "success", "report_id": str(new_report.id), "message": "Звіт успішно збережено"}

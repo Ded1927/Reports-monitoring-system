@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from uuid import UUID
-from .models import ReportType, ControlType
+from .models import ReportType, ControlType, UserRole
 
 class ControlOptionSchema(BaseModel):
     id: UUID
@@ -53,3 +53,24 @@ class ReportAnswerSubmitSchema(BaseModel):
 class ReportSubmitSchema(BaseModel):
     template_id: UUID
     answers: List[ReportAnswerSubmitSchema]
+
+# --- USER SCHEMAS ---
+class UserBase(BaseModel):
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role: UserRole = UserRole.USER
+    is_active: bool = True
+    organization_id: Optional[UUID] = None
+
+class UserCreate(UserBase):
+    password: str
+
+class UserRead(UserBase):
+    id: UUID
+    model_config = ConfigDict(from_attributes=True)
+
+class UserUpdateProfile(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    password: Optional[str] = None

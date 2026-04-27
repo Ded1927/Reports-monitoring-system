@@ -3,9 +3,11 @@ import sys
 import pandas as pd
 from sqlalchemy.orm import Session
 from app.database import engine, SessionLocal
-from app.models import ReportTemplate, ReportType, TemplatePart, TemplateCategory, TemplateControl, ControlType, ControlOption
+from app.models import ReportTemplate, ReportType, TemplatePart, TemplateCategory, TemplateControl, ControlType, ControlOption, User, UserRole, Organization, Base
+from app.auth import get_password_hash
 
 def seed():
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     # Check if template already exists
     existing = db.query(ReportTemplate).filter_by(name="Самооцінювання стану кіберзахисту", type=ReportType.SELF_ASSESSMENT).first()
@@ -157,6 +159,31 @@ def seed():
                 order_num=opt_idx + 1
             ))
         db.commit()
+
+    # --- CREATE TEST USER ---
+    test_user = db.query(User).filter_by(email="test@cyber.gov.ua").first()
+    if not test_user:
+        print("Creating test user...")
+        org = db.query(Organization).filter_by(name="Тестова Організація").first()
+        if not org:
+            org = Organization(name="Тестова Організація")
+            db.add(org)
+            db.commit()
+            db.refresh(org)
+
+        user = User(
+            email="test@cyber.gov.ua",
+            hashed_password=get_password_hash("password123"),
+            first_name="Іван",
+            last_name="Користувач",
+            role=UserRole.USER,
+            organization_id=org.id
+        )
+        db.add(user)
+        db.commit()
+        print("Test user created: test@cyber.gov.ua / password123")
+    else:
+        print("Test user already exists.")
 
     print("Seeding completed successfully!")
 
