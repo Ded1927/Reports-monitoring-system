@@ -146,3 +146,15 @@ class ReportAnswer(Base):
     auditor_note = Column(Text, nullable=True)
 
     report = relationship("Report", back_populates="answers")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_read = Column(Boolean, default=False)
+    # Для USER: конкретний акаунт. Якщо NULL — спільне для ролі.
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    # Для ANALYST/FUNC_ADMIN: спільні сповіщення для ролі
+    target_role = Column(Enum(UserRole), nullable=True)
