@@ -49,3 +49,21 @@ def mark_read(
         notif.is_read = True
         db.commit()
     return {"message": "Marked as read"}
+
+@router.post("/read-all")
+def mark_all_read(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    if current_user.role == UserRole.USER:
+        db.query(Notification).filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read == False
+        ).update({"is_read": True})
+    else:
+        db.query(Notification).filter(
+            Notification.target_role == current_user.role,
+            Notification.is_read == False
+        ).update({"is_read": True})
+    db.commit()
+    return {"message": "All marked as read"}
