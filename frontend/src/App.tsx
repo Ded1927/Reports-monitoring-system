@@ -54,18 +54,23 @@ function ProtectedRoutes() {
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#fafafa' }}>
       <AppBar position="static" elevation={0} sx={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 700, letterSpacing: '-0.5px' }}>
-            КіберЗахист. {isAnalyst ? 'Кабінет Аналітика' : 'Кабінет Користувача'}
+        {/* Рядок 1: назва системи */}
+        <Toolbar sx={{ minHeight: '56px !important', py: 0.5 }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '-0.3px', fontSize: '1.5rem' }}>
+            ІС Моніторингу стану кіберзахисту
           </Typography>
-          <Typography variant="body2" sx={{ mr: 3, opacity: 0.85 }}>
-            {user.first_name} {user.last_name} | {user.email}
-          </Typography>
-          <Button color="inherit" onClick={logout} startIcon={<LogoutIcon />} sx={{ fontWeight: 600 }}>
-            Вийти
-          </Button>
         </Toolbar>
-        <Box sx={{ px: 3, bgcolor: 'primary.dark' }}>
+
+        {/* Рядок 2: вкладки + тип кабінету + ім'я + вийти */}
+        <Box sx={{ px: 3, bgcolor: 'primary.dark', display: 'flex', alignItems: 'center' }}>
+          {/* Тип кабінету зліва — займає рівно 1/3 */}
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ opacity: 0.7, whiteSpace: 'nowrap', letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.7rem', color: 'inherit' }}>
+              {isAnalyst ? 'Кабінет аналітика' : 'Кабінет користувача'}
+            </Typography>
+          </Box>
+
+          {/* Вкладки по центру */}
           <Tabs
             value={currentTab}
             textColor="inherit"
@@ -73,6 +78,7 @@ function ProtectedRoutes() {
             sx={{ minHeight: 46 }}
             variant="scrollable"
             scrollButtons="auto"
+            centered
           >
             {tabs.map(tab => (
               <Tab
@@ -85,6 +91,22 @@ function ProtectedRoutes() {
               />
             ))}
           </Tabs>
+
+          {/* Ім'я + вийти справа — займає рівно 1/3, вирівняно вправо */}
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
+            <Typography variant="body2" sx={{ opacity: 0.85, whiteSpace: 'nowrap' }}>
+              {user.first_name} {user.last_name}
+            </Typography>
+            <Button
+              color="inherit"
+              onClick={logout}
+              startIcon={<LogoutIcon sx={{ fontSize: '1rem !important' }} />}
+              size="small"
+              sx={{ fontWeight: 600, textTransform: 'none', opacity: 0.85, '&:hover': { opacity: 1 }, minHeight: 46 }}
+            >
+              Вийти
+            </Button>
+          </Box>
         </Box>
       </AppBar>
 
