@@ -47,12 +47,11 @@ def login(
         samesite="strict",
         path="/",
     )
-    # Plain cookie fallback for local dev (HTTP)
     response.set_cookie(
         key="session",
         value=token,
         httponly=True,
-        secure=False,
+        secure=True,
         samesite="lax",
         path="/",
     )
@@ -66,7 +65,7 @@ def logout(response: Response, request: Request):
         delete_session(token)   # removes key from Redis immediately
 
     response.delete_cookie("__Host-session", path="/", secure=True, httponly=True, samesite="strict")
-    response.delete_cookie("session", path="/")
+    response.delete_cookie("session", path="/", secure=True, httponly=True, samesite="lax")
     return {"message": "Successfully logged out"}
 
 
