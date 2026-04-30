@@ -41,7 +41,10 @@ export default function Notifications() {
   const fetchNotifs = useCallback(() => {
     fetch('/api/notifications')
       .then(r => r.json())
-      .then(data => { setNotifs(Array.isArray(data) ? data : []); setLoading(false); })
+      .then(data => {
+        setNotifs(Array.isArray(data) ? data : (data.items ?? []));
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 

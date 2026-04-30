@@ -48,8 +48,8 @@ export default function AdminSubjects() {
   const [editingSector, setEditingSector] = useState<any>(null);
 
   const fetchData = () => {
-    fetch('/api/admin/users').then(r => r.json()).then(d => { setUsers(Array.isArray(d) ? d : []); setLoadingUsers(false); }).catch(() => setLoadingUsers(false));
-    fetch('/api/admin/organizations').then(r => r.json()).then(d => setOrgs(Array.isArray(d) ? d : []));
+    fetch('/api/admin/users').then(r => r.json()).then(d => { setUsers(Array.isArray(d) ? d : (d.items ?? [])); setLoadingUsers(false); }).catch(() => setLoadingUsers(false));
+    fetch('/api/admin/organizations').then(r => r.json()).then(d => setOrgs(Array.isArray(d) ? d : (d.items ?? [])));
   };
 
   useEffect(() => { fetchData(); }, []);

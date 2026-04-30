@@ -30,8 +30,14 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Помилка авторизації');
+        let errMessage = 'Помилка авторизації';
+        try {
+          const errData = await res.json();
+          errMessage = errData.detail || errMessage;
+        } catch (e) {
+          errMessage = `Сервер недоступний (${res.status})`;
+        }
+        throw new Error(errMessage);
       }
 
       await checkAuth(); // Оновлюємо стан юзера

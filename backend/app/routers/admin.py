@@ -1,50 +1,74 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
 
 from ..database import get_db
-from ..models import User, UserRole, Organization, ReportTemplate, TemplatePart, TemplateCategory, TemplateControl, ControlOption, Report, ReportStatus
+from ..models import User, UserRole, Organization, ReportTemplate, Report, ReportStatus
 from ..auth import get_password_hash, RoleChecker
-from ..schemas import UserRead
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 ADMIN_ROLES = [UserRole.FUNC_ADMIN]
 
-# ─── STATS ──────────────────────────────────────────────────────────────────
+# ─── Shared pagination dep ────────────────────────────────────────────────────
+
+def paginate(
+    skip: int = Query(0, ge=0, description="Кількість записів для пропуску"),
+    limit: int = Query(50, ge=1, le=200, description="Кількість записів на сторінці (макс. 200)"),
+):
+    return {"skip": skip, "limit": limit}
+
+# ─── STATS ────────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
 def get_stats(db: Session = Depends(get_db), _=Depends(RoleChecker(ADMIN_ROLES))):
-    total_users = db.query(User).count()
-    total_orgs = db.query(Organization).count()
-    new_users = db.query(User).filter(User.is_active == True).count()
-    total_reports = db.query(Report).filter(Report.status == ReportStatus.SUBMITTED).count()
     return {
-        "total_users": total_users,
-        "total_orgs": total_orgs,
-        "new_users": new_users,
-        "total_reports": total_reports,
+        "total_users": db.query(User).count(),
+        "total_orgs": db.query(Organization).count(),
+        "new_users": db.query(User).filter(User.is_active == True).count(),
+        "total_reports": db.query(Report).filter(Report.status == ReportStatus.SUBMITTED).count(),
     }
 
-# ─── USERS ───────────────────────────────────────────────────────────────────
+# ─── USERS ────────────────────────────────────────────────────────────────────
 
 @router.get("/users")
-def list_users(db: Session = Depends(get_db), _=Depends(RoleChecker(ADMIN_ROLES))):
-    users = db.query(User).order_by(User.email).all()
-    return [
-        {
-            "id": str(u.id),
-            "email": u.email,
-            "first_name": u.first_name,
-            "last_name": u.last_name,
-            "role": u.role.value,
-            "is_active": u.is_active,
-            "organization_id": str(u.organization_id) if u.organization_id else None,
-        }
-        for u in users
-    ]
+def list_users(
+    role: Optional[str] = Query(None, description="Фільтр за роллю"),
+    is_active: Optional[bool] = Query(None, description="Фільтр за активністю"),
+    pg: dict = Depends(paginate),
+    db: Session = Depends(get_db),
+    _=Depends(RoleChecker(ADMIN_ROLES)),
+):
+    q = db.query(User)
+    if role:
+        try:
+            q = q.filter(User.role == UserRole(role))
+        except ValueError:
+            raise HTTPException(400, f"Unknown role: {role}")
+    if is_active is not None:
+        q = q.filter(User.is_active == is_active)
+
+    total = q.count()
+    users = q.order_by(User.email).offset(pg["skip"]).limit(pg["limit"]).all()
+
+    return {
+        "total": total,
+        "skip": pg["skip"],
+        "limit": pg["limit"],
+        "items": [
+            {
+                "id": str(u.id),
+                "email": u.email,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "role": u.role.value,
+                "is_active": u.is_active,
+                "organization_id": str(u.organization_id) if u.organization_id else None,
+            }
+            for u in users
+        ],
+    }
 
 @router.post("/users")
 def create_user(body: dict, db: Session = Depends(get_db), _=Depends(RoleChecker(ADMIN_ROLES))):
@@ -91,9 +115,20 @@ def delete_user(user_id: UUID, db: Session = Depends(get_db), _=Depends(RoleChec
 # ─── ORGANIZATIONS ────────────────────────────────────────────────────────────
 
 @router.get("/organizations")
-def list_orgs(db: Session = Depends(get_db), _=Depends(RoleChecker(ADMIN_ROLES))):
-    orgs = db.query(Organization).order_by(Organization.name).all()
-    return [{"id": str(o.id), "name": o.name} for o in orgs]
+def list_orgs(
+    pg: dict = Depends(paginate),
+    db: Session = Depends(get_db),
+    _=Depends(RoleChecker(ADMIN_ROLES)),
+):
+    q = db.query(Organization).order_by(Organization.name)
+    total = q.count()
+    orgs = q.offset(pg["skip"]).limit(pg["limit"]).all()
+    return {
+        "total": total,
+        "skip": pg["skip"],
+        "limit": pg["limit"],
+        "items": [{"id": str(o.id), "name": o.name} for o in orgs],
+    }
 
 @router.post("/organizations")
 def create_org(body: dict, db: Session = Depends(get_db), _=Depends(RoleChecker(ADMIN_ROLES))):
@@ -123,20 +158,27 @@ def delete_org(org_id: UUID, db: Session = Depends(get_db), _=Depends(RoleChecke
 # ─── TEMPLATES ────────────────────────────────────────────────────────────────
 
 @router.get("/templates")
-def list_templates(db: Session = Depends(get_db), _=Depends(RoleChecker(ADMIN_ROLES))):
-    templates = db.query(ReportTemplate).order_by(ReportTemplate.name).all()
+def list_templates(
+    pg: dict = Depends(paginate),
+    db: Session = Depends(get_db),
+    _=Depends(RoleChecker(ADMIN_ROLES)),
+):
+    q = db.query(ReportTemplate).order_by(ReportTemplate.name)
+    total = q.count()
+    templates = q.offset(pg["skip"]).limit(pg["limit"]).all()
     result = []
     for t in templates:
         parts_data = []
         for p in t.parts:
-            cats_data = []
-            for c in p.categories:
-                cats_data.append({
+            cats_data = [
+                {
                     "id": str(c.id),
                     "name": c.name,
                     "order_num": c.order_num,
                     "controls_count": len(c.controls),
-                })
+                }
+                for c in p.categories
+            ]
             parts_data.append({
                 "id": str(p.id),
                 "name": p.name,
@@ -151,4 +193,4 @@ def list_templates(db: Session = Depends(get_db), _=Depends(RoleChecker(ADMIN_RO
             "is_active": t.is_active,
             "parts": parts_data,
         })
-    return result
+    return {"total": total, "skip": pg["skip"], "limit": pg["limit"], "items": result}

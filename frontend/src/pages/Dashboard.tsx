@@ -19,7 +19,7 @@ export default function Dashboard() {
     fetch('/api/reports/my')
       .then(res => res.json())
       .then(data => {
-        setReports(data);
+        setReports(Array.isArray(data) ? data : (data.items ?? []));
         setLoading(false);
       })
       .catch((err) => {

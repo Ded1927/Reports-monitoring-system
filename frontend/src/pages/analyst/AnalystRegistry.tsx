@@ -21,7 +21,7 @@ export default function AnalystRegistry() {
   useEffect(() => {
     fetch('/api/reports/all')
       .then(r => r.json())
-      .then(data => { setReports(Array.isArray(data) ? data : []); setLoading(false); })
+      .then(data => { setReports(Array.isArray(data) ? data : (data.items ?? [])); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
@@ -40,7 +40,7 @@ export default function AnalystRegistry() {
   const handleReturn = async (reportId: string) => {
     await fetch(`/api/reports/${reportId}/return`, { method: 'POST' });
     const data = await fetch('/api/reports/all').then(r => r.json());
-    setReports(Array.isArray(data) ? data : []);
+    setReports(Array.isArray(data) ? data : (data.items ?? []));
   };
 
   return (

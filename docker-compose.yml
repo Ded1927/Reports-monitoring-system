@@ -5,16 +5,13 @@ services:
     image: postgres:15-alpine
     container_name: cyber_db
     restart: always
-    environment:
-      POSTGRES_USER: cyber_user
-      POSTGRES_PASSWORD: cyber_password
-      POSTGRES_DB: cyber_mon_db
+    env_file: .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - internal_network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U cyber_user -d cyber_mon_db" ]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,13 +22,14 @@ services:
       dockerfile: Dockerfile
     container_name: cyber_backend
     restart: always
-    environment:
-      - DATABASE_URL=postgresql://cyber_user:cyber_password@db:5432/cyber_mon_db
+    env_file: .env
     volumes:
       - ./backend:/app
       - file_storage:/storage
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - internal_network
@@ -47,8 +45,39 @@ services:
       - /app/node_modules
     networks:
       - internal_network
-    environment:
-      - CHOKIDAR_USEPOLLING=true
+    env_file: .env
+
+  redis:
+    image: redis:7-alpine
+    container_name: cyber_redis
+    restart: always
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build: ./backend
+    container_name: cyber_worker
+    restart: always
+    command: celery -A app.celery_app worker --loglevel=info
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./backend:/app
+      - file_storage:/app/storage
+    networks:
+      - internal_network
 
   nginx:
     image: nginx:alpine
@@ -70,8 +99,7 @@ services:
     restart: always
     ports:
       - "4040:4040"
-    environment:
-      - NGROK_AUTHTOKEN=3CyVaxAMF1uM9d0KLl75npk8zga_6c1Txdz3756MAz3WXcRcA
+    env_file: .env
     command: http nginx:80 --log=stdout
     depends_on:
       - nginx
@@ -84,3 +112,4 @@ networks:
 volumes:
   postgres_data:
   file_storage:
+  redis_data:

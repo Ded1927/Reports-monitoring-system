@@ -32,7 +32,7 @@ export default function AnalystAnalytics() {
   useEffect(() => {
     fetch('/api/reports/all')
       .then(r => r.json())
-      .then(data => { setReports(Array.isArray(data) ? data : []); setLoading(false); })
+      .then(data => { setReports(Array.isArray(data) ? data : (data.items ?? [])); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
