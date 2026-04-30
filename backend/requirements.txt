@@ -12,3 +12,4 @@ openpyxl
 redis==5.0.4
 celery==5.3.6
 python-json-logger==2.0.7
+zipp>=3.19.1

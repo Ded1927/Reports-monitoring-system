@@ -1,9 +1,9 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
-# Install dependencies for psycopg2 and argon2
-RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+# Upgrade system libraries and install dependencies for psycopg2 and argon2
+RUN apt-get update && apt-get upgrade -y && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
